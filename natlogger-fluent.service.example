@@ -1,0 +1,10 @@
+[Unit]
+Description = NAT logger to fluent
+
+[Service]
+ExecStart = /path/to/natlogger-fluent --fluentd-endpoint http://localhost:8888/debug.natlogger
+Restart = always
+Type = simple
+
+[Install]
+WantedBy = multi-user.target

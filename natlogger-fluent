@@ -1,0 +1,53 @@
+#!/usr/bin/env ruby
+
+require 'json'
+require 'optparse'
+require 'net/http'
+require 'uri'
+
+parser = OptionParser.new
+
+$opt = {
+  :fluentd_endpoint => nil,
+  :debug => false,
+}
+
+parser.on("-H HTTP_ADDR", "--fluentd-endpoint HTTP_ADDR",
+          "Fluentd HTTP Input endpoint (ex. http://localhost:8888/test.tag.here") do |http_addr|
+  $opt[:fluentd_endpoint] = http_addr
+end
+
+parser.on('--debug') do
+  $opt[:debug] = true
+end
+
+parser.parse!(ARGV)
+
+if $opt[:fluentd_endpoint]
+  post_addr = URI.parse($opt[:fluentd_endpoint])
+else
+  post_addr = nil
+end
+
+hostname = Socket.gethostname.split(".").first
+
+STDOUT.sync = true
+IO.popen("stdbuf -o0 conntrack -E -o timestamp --any-nat -e NEW -e DESTROY --buffer-size #{64*1024*1024} -e 'NEW' -e 'DESTROY' | grep -v icmp") do |io|
+  while line = io.readline
+    m = /\[(?<time>\d+\.\d+)\]\s+\[(?<event>[A-Z]+)\]\s+(?<proto>[a-z]+)\s+(?<message>.*)$/.match(line)
+
+    record = {:timestamp => Time.at(Float(m["time"])), :hostname => hostname, :event => m["event"], :proto => m["proto"], :message => m["message"]}
+
+    src = /\ssrc=(?<ipaddr>[\.0-9]+)/.match(record[:message])["ipaddr"]
+
+    if post_addr
+      post_addr.query = "time=#{record[:timestamp].to_i}"
+      Net::HTTP.post_form(post_addr,
+                          {'json'=>record.to_json})
+    end
+
+    if $opt[:debug]
+      puts(record.to_json)
+    end
+  end
+end
