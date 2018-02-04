@@ -29,7 +29,7 @@ else
   post_addr = nil
 end
 
-hostname = Socket.gethostname.split(".").first
+hostname = Socket.gethostname
 
 STDOUT.sync = true
 IO.popen("stdbuf -o0 conntrack -E -o timestamp --any-nat -e NEW -e DESTROY --buffer-size #{64*1024*1024} -e 'NEW' -e 'DESTROY' | grep -v icmp") do |io|
